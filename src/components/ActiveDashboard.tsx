@@ -61,7 +61,7 @@ export const ActiveDashboard: React.FC<ActiveDashboardProps> = ({
       <div className="flex items-center justify-center gap-2 mb-2 flex-wrap">
         <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-200/60">
           <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-          Kartu Aktif
+          Kartu Siap Digunakan
         </span>
         <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-mono font-bold bg-slate-900 text-cyan-300 border border-slate-700">
           <Radio className="w-3 h-3 text-cyan-400" />
@@ -71,10 +71,10 @@ export const ActiveDashboard: React.FC<ActiveDashboardProps> = ({
 
       {/* Main Title */}
       <h1 className="text-2xl font-extrabold tracking-tight text-slate-900 font-display text-center">
-        {card.name}
+        {card.name} siap menerima ulasan
       </h1>
       <p className="text-xs text-slate-500 text-center mt-1 leading-relaxed">
-        {card.addr || 'Profil bisnis terhubung ke Google Maps'}
+        Aktivasi selesai. Letakkan kartu di meja kasir Anda untuk mulai menerima ulasan Google Maps dari pelanggan.
       </p>
 
       {/* Google Maps Connection Card */}

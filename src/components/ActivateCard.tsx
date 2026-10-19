@@ -23,9 +23,13 @@ import {
   Cpu,
   Star,
   CheckCircle2,
+  Camera,
+  QrCode,
+  ArrowRight,
 } from 'lucide-react';
 import { sound } from '../utils/audio';
 import { isWebNfcSupported, NfcService, generate1356Uid } from '../utils/nfc';
+import { ScanQrModal } from './ScanQrModal';
 
 interface ActivateCardProps {
   cardId: string;
@@ -33,6 +37,7 @@ interface ActivateCardProps {
 }
 
 export const ActivateCard: React.FC<ActivateCardProps> = ({ cardId, onActivated }) => {
+  const [activeCardId, setActiveCardId] = useState(cardId);
   const [bizQuery, setBizQuery] = useState('');
   const [selectedPlace, setSelectedPlace] = useState<{
     id: string;
@@ -50,10 +55,10 @@ export const ActivateCard: React.FC<ActivateCardProps> = ({ cardId, onActivated 
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
   // NFC 13.56 MHz hardware / connection state
-  const hasWebNfc = isWebNfcSupported();
   const [nfcUid, setNfcUid] = useState<string>(() => generate1356Uid());
   const [isScanningNfc, setIsScanningNfc] = useState(false);
-  const [nfcMessage, setNfcMessage] = useState<string>('');
+  const [nfcDetected, setNfcDetected] = useState(true);
+  const [showScanQrModal, setShowScanQrModal] = useState(false);
 
   const pinRefs = [
     useRef<HTMLInputElement>(null),
@@ -106,7 +111,6 @@ export const ActivateCard: React.FC<ActivateCardProps> = ({ cardId, onActivated 
 
   const handleScanNfcTag = async () => {
     setIsScanningNfc(true);
-    setNfcMessage('Mendekatkan kartu NFC 13.56 MHz...');
     sound.playStarPing(2);
 
     try {
@@ -114,17 +118,17 @@ export const ActivateCard: React.FC<ActivateCardProps> = ({ cardId, onActivated 
         (result) => {
           setIsScanningNfc(false);
           setNfcUid(result.serialNumber);
-          setNfcMessage(`Kartu 13.56 MHz terhubung! UID: ${result.serialNumber}`);
+          setNfcDetected(true);
           sound.playNfcTap();
         },
         (err) => {
           setIsScanningNfc(false);
-          setNfcMessage(err);
+          setErrorMsg(err);
         }
       );
     } catch (e: any) {
       setIsScanningNfc(false);
-      setNfcMessage(e?.message || 'Gagal memindai kartu.');
+      setErrorMsg(e?.message || 'Gagal memindai kartu NFC.');
     }
   };
 
@@ -164,7 +168,7 @@ export const ActivateCard: React.FC<ActivateCardProps> = ({ cardId, onActivated 
     setErrorMsg('');
 
     if (!selectedPlace) {
-      setErrorMsg('Pilih atau ketik nama bisnis untuk dikoneksikan ke Google Maps.');
+      setErrorMsg('Ketik nama bisnis dan pilih bisnis yang sesuai dari hasil pencarian.');
       return;
     }
 
@@ -176,12 +180,12 @@ export const ActivateCard: React.FC<ActivateCardProps> = ({ cardId, onActivated 
 
     const fullPin = pinDigits.join('');
     if (!/^\d{4}$/.test(fullPin)) {
-      setErrorMsg('PIN harus 4 digit angka.');
+      setErrorMsg('Buat PIN 4 digit angka untuk keamanan kartu.');
       return;
     }
 
     const newCard: CardData = {
-      id: cardId,
+      id: activeCardId,
       placeId: selectedPlace.id,
       name: selectedPlace.name,
       addr: selectedPlace.addr,
@@ -207,61 +211,105 @@ export const ActivateCard: React.FC<ActivateCardProps> = ({ cardId, onActivated 
 
   return (
     <div>
-      {/* Progress step bars */}
+      {/* 4-Step Visual Progress Breadcrumb */}
+      <div className="flex items-center justify-between text-[11px] font-semibold text-slate-400 mb-3 px-0.5">
+        <span className="text-blue-600 font-bold flex items-center gap-1">
+          <span className="w-4 h-4 rounded-full bg-blue-600 text-white flex items-center justify-center text-[10px]">1</span>
+          Tap/Scan
+        </span>
+        <span className="text-slate-300">→</span>
+        <span className={selectedPlace ? 'text-blue-600 font-bold' : ''}>
+          2. Pilih Bisnis
+        </span>
+        <span className="text-slate-300">→</span>
+        <span className={pinDigits.every((d) => d) ? 'text-blue-600 font-bold' : ''}>
+          3. Buat PIN
+        </span>
+        <span className="text-slate-300">→</span>
+        <span>4. Selesai</span>
+      </div>
+
       <div className="flex gap-1.5 mb-5">
-        <span className="flex-1 h-1 rounded-full bg-blue-600" />
-        <span className="flex-1 h-1 rounded-full bg-slate-200" />
-        <span className="flex-1 h-1 rounded-full bg-slate-200" />
+        <span className="flex-1 h-1.5 rounded-full bg-blue-600" />
+        <span className={`flex-1 h-1.5 rounded-full ${selectedPlace ? 'bg-blue-600' : 'bg-slate-200'}`} />
+        <span className={`flex-1 h-1.5 rounded-full ${pinDigits.every((d) => d) ? 'bg-blue-600' : 'bg-slate-200'}`} />
       </div>
 
-      {/* NFC 13.56 MHz Active Connection Header Badge */}
-      <div className="mb-4 p-2.5 rounded-2xl bg-slate-900 text-white flex items-center justify-between text-xs shadow-sm">
-        <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-lg bg-blue-500/20 text-cyan-400 flex items-center justify-center shrink-0">
-            <Radio className="w-3.5 h-3.5 animate-pulse" />
-          </div>
-          <div>
-            <div className="flex items-center gap-1.5">
-              <span className="font-mono font-bold text-cyan-300">NFC 13.56 MHz</span>
-              <span className="text-[10px] px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300 font-semibold border border-emerald-500/30">
-                ISO 14443-A
-              </span>
-            </div>
-            <p className="text-[10px] text-slate-300 font-mono truncate max-w-[190px]">
-              UID: {nfcUid}
-            </p>
-          </div>
-        </div>
-
-        <button
-          type="button"
-          onClick={handleScanNfcTag}
-          disabled={isScanningNfc}
-          className="px-2.5 py-1.5 rounded-lg bg-cyan-400 hover:bg-cyan-300 text-slate-950 font-bold text-[10.5px] transition-colors cursor-pointer shrink-0 flex items-center gap-1 disabled:opacity-50"
-        >
-          <Cpu className="w-3 h-3" />
-          <span>{isScanningNfc ? 'Memindai...' : 'Pindai Kartu'}</span>
-        </button>
-      </div>
-
+      {/* Main Title & User's Exact Copywriting */}
       <div className="mb-5">
+        <div className="flex items-center gap-2 mb-1">
+          <span className="text-[11px] font-mono font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
+            Aktivasi Kartu NFC
+          </span>
+          <span className="text-[11px] font-mono text-slate-400 font-bold">
+            #{activeCardId}
+          </span>
+        </div>
         <h1 className="text-2xl font-extrabold tracking-tight text-slate-900 font-display">
-          Aktivasi Kartu NFC 13.56 MHz
+          Aktivasi Kartu Ulasan
         </h1>
-        <p className="text-sm text-slate-500 mt-1 leading-relaxed">
-          Koneksikan kartu fisik ulasan dengan profil bisnis di Google Maps.
+        <p className="text-xs text-slate-600 mt-1.5 leading-relaxed bg-blue-50/70 p-2.5 rounded-xl border border-blue-100">
+          <strong>Langkah mudah:</strong> Tap kartu atau scan QR Code, ketik nama bisnis, pilih bisnis yang sesuai, buat PIN, dan selesai. Kartu siap digunakan.
         </p>
       </div>
 
+      {/* Step 1: Tap Kartu NFC atau Scan QR Code Card */}
+      <div className="mb-5 p-3 rounded-2xl bg-slate-900 text-white space-y-2.5 shadow-sm">
+        <div className="flex items-center justify-between text-xs">
+          <div className="flex items-center gap-1.5">
+            <Radio className="w-3.5 h-3.5 text-cyan-400 animate-pulse" />
+            <span className="font-bold text-cyan-300">1. Tap Kartu atau Scan QR Code</span>
+          </div>
+          <span className="text-[10px] font-mono text-slate-300">
+            13.56 MHz (ISO 14443-A)
+          </span>
+        </div>
+
+        <div className="flex items-center justify-between p-2 rounded-xl bg-slate-800/80 text-[11px]">
+          <div>
+            <span className="text-slate-400 block text-[10px]">Status Kartu Fisik:</span>
+            <span className="font-mono text-cyan-200 font-bold">
+              ✓ Terhubung (#{activeCardId})
+            </span>
+          </div>
+          <div className="text-right">
+            <span className="text-slate-400 block text-[10px]">Chip UID:</span>
+            <span className="font-mono text-slate-200 text-[10px]">{nfcUid.slice(0, 14)}</span>
+          </div>
+        </div>
+
+        {/* Dual Trigger Action: Tap NFC or Scan QR Code */}
+        <div className="grid grid-cols-2 gap-2 pt-0.5">
+          <button
+            type="button"
+            onClick={handleScanNfcTag}
+            disabled={isScanningNfc}
+            className="py-2 px-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer transition-colors disabled:opacity-50"
+          >
+            <Radio className="w-3 h-3 text-cyan-300" />
+            <span>{isScanningNfc ? 'Membaca...' : 'Tap Kartu NFC'}</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setShowScanQrModal(true)}
+            className="py-2 px-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-cyan-300 font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer transition-colors border border-slate-700"
+          >
+            <Camera className="w-3 h-3" />
+            <span>Scan QR Code</span>
+          </button>
+        </div>
+      </div>
+
       <form onSubmit={handleSubmit} noValidate className="space-y-4">
-        {/* Business Selector with Google Maps Connection */}
+        {/* Step 2: Ketik nama bisnis & pilih bisnis yang sesuai */}
         <div>
           <div className="flex items-center justify-between mb-1.5">
             <label htmlFor="biz-input" className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
-              Nama Bisnis di Google Maps
+              2. Ketik & Pilih Nama Bisnis
             </label>
-            <span className="text-[11px] text-blue-600 font-medium flex items-center gap-1">
-              <MapPin className="w-3 h-3 text-red-500" /> Terkoneksi Google Maps
+            <span className="text-[11px] text-blue-600 font-semibold flex items-center gap-1">
+              <MapPin className="w-3 h-3 text-red-500" /> Google Maps
             </span>
           </div>
 
@@ -294,7 +342,7 @@ export const ActivateCard: React.FC<ActivateCardProps> = ({ cardId, onActivated 
               <div className="pt-2 border-t border-slate-200/60 flex items-center justify-between text-xs">
                 <div className="flex items-center gap-1.5 text-[11px] text-emerald-800 font-medium">
                   <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>Koneksi Google Maps Aktif</span>
+                  <span>Bisnis Sesuai Terpilih</span>
                   {selectedPlace.rating && (
                     <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 text-[10px] font-bold">
                       <Star className="w-2.5 h-2.5 fill-amber-500 text-amber-500" />
@@ -348,10 +396,10 @@ export const ActivateCard: React.FC<ActivateCardProps> = ({ cardId, onActivated 
 
               {/* Suggestions Dropdown with Google Maps Places */}
               {isDropdownOpen && (bizQuery.trim().length > 0 || filteredPresets.length > 0) && (
-                <div className="absolute left-0 right-0 top-full mt-1.5 bg-white border border-slate-200 rounded-xl shadow-xl z-20 max-h-64 overflow-y-auto divide-y divide-slate-100">
+                <div className="absolute left-0 right-0 top-full mt-1.5 bg-white border border-slate-200 rounded-xl shadow-xl z-20 max-h-60 overflow-y-auto divide-y divide-slate-100">
                   <div className="px-3 py-1.5 bg-slate-50 text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center justify-between">
-                    <span>Saran Tempat Google Maps</span>
-                    <span>13.56 MHz Ready</span>
+                    <span>Pilih Bisnis yang Sesuai</span>
+                    <span>Google Maps</span>
                   </div>
 
                   {filteredPresets.map((preset, idx) => (
@@ -372,7 +420,7 @@ export const ActivateCard: React.FC<ActivateCardProps> = ({ cardId, onActivated 
                           )}
                         </div>
                         <div className="text-xs text-slate-500 truncate">{preset.addr}</div>
-                        <div className="text-[10px] text-blue-600 font-mono mt-0.5">Google Maps Verified</div>
+                        <div className="text-[10px] text-blue-600 font-mono mt-0.5">Pilih Bisnis Ini →</div>
                       </div>
                     </button>
                   ))}
@@ -386,7 +434,7 @@ export const ActivateCard: React.FC<ActivateCardProps> = ({ cardId, onActivated 
                       <Sparkles className="w-4 h-4 shrink-0 text-blue-600" />
                       <div>
                         Gunakan bisnis baru: <strong>"{bizQuery.trim()}"</strong>
-                        <span className="block text-[10.5px] text-slate-500">Otomatis dihubungkan dengan tautan Google Maps ulasan</span>
+                        <span className="block text-[10.5px] text-slate-500">Otomatis dihubungkan ke tautan ulasan Google Maps</span>
                       </div>
                     </button>
                   )}
@@ -395,14 +443,14 @@ export const ActivateCard: React.FC<ActivateCardProps> = ({ cardId, onActivated 
             </div>
           )}
           <p className="text-[11.5px] text-slate-500 mt-1.5">
-            Pilih bisnis Anda dari saran terverifikasi atau masukkan nama usaha Anda.
+            Ketik nama usaha Anda lalu klik bisnis yang sesuai dari hasil pencarian.
           </p>
         </div>
 
         {/* WhatsApp Owner Number */}
         <div>
           <label htmlFor="wa-input" className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-            Nomor WhatsApp Pemilik
+            Nomor WhatsApp Pemilik (Filter Keluhan)
           </label>
           <div className="relative">
             <Smartphone className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
@@ -418,7 +466,7 @@ export const ActivateCard: React.FC<ActivateCardProps> = ({ cardId, onActivated 
             />
           </div>
           <div className="flex items-center justify-between text-[11.5px] text-slate-500 mt-1.5">
-            <span>Keluhan dari rating 1–3 difilter langsung ke nomor ini.</span>
+            <span>Ulasan bintang 1–3 dialihkan ke WhatsApp ini.</span>
             {waInput && (
               <span className="font-mono text-blue-600 font-semibold">
                 {formatWhatsAppDisplay(normalizeWhatsApp(waInput) || '')}
@@ -427,14 +475,14 @@ export const ActivateCard: React.FC<ActivateCardProps> = ({ cardId, onActivated 
           </div>
         </div>
 
-        {/* 4-Digit Security PIN */}
+        {/* Step 3: Buat PIN */}
         <div>
           <div className="flex items-center justify-between mb-1.5">
             <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-              PIN 4 Digit
+              3. Buat PIN Keamanan (4 Digit)
             </label>
             <span className="text-[11px] text-slate-400 flex items-center gap-1">
-              <ShieldCheck className="w-3.5 h-3.5 text-blue-500" /> Keamanan kartu
+              <ShieldCheck className="w-3.5 h-3.5 text-blue-500" /> Kunci Pengaturan
             </span>
           </div>
 
@@ -457,7 +505,7 @@ export const ActivateCard: React.FC<ActivateCardProps> = ({ cardId, onActivated 
             ))}
           </div>
           <p className="text-[11.5px] text-slate-500 mt-1.5">
-            Dipakai untuk mengunci kartu dan mengedit konfigurasi ulasan.
+            PIN 4 digit ini digunakan untuk mengamankan dan mengedit kartu.
           </p>
         </div>
 
@@ -468,14 +516,14 @@ export const ActivateCard: React.FC<ActivateCardProps> = ({ cardId, onActivated 
             onClick={() => setShowAdvanced(!showAdvanced)}
             className="flex items-center gap-1 text-xs font-semibold text-blue-600 hover:text-blue-700 cursor-pointer"
           >
-            <span>Pengaturan Lanjutan (Link Google Maps Kustom)</span>
+            <span>Pengaturan Lanjutan (Link Google Maps Manual)</span>
             <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showAdvanced ? 'rotate-180' : ''}`} />
           </button>
 
           {showAdvanced && (
             <div className="mt-2.5 p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
               <label htmlFor="custom-url" className="block text-[11px] font-bold text-slate-600">
-                URL Google Review / Google Maps Place ID Manual
+                URL Google Review / Place ID Kustom
               </label>
               <input
                 id="custom-url"
@@ -486,7 +534,7 @@ export const ActivateCard: React.FC<ActivateCardProps> = ({ cardId, onActivated 
                 className="w-full px-3 py-2 text-xs bg-white text-slate-800 rounded-lg border border-slate-200 focus:outline-none focus:border-blue-600"
               />
               <p className="text-[10.5px] text-slate-500">
-                Jika dikosongkan, sistem otomatis membuat tautan Google Maps ulasan resmi berbasis Place ID bisnis Anda.
+                Opsional. Jika kosong, sistem otomatis membuat link ulasan resmi dari profil bisnis Google Maps.
               </p>
             </div>
           )}
@@ -500,15 +548,28 @@ export const ActivateCard: React.FC<ActivateCardProps> = ({ cardId, onActivated 
           </div>
         )}
 
-        {/* Submit Button */}
+        {/* Step 4: Submit Button: Selesai. Kartu siap digunakan */}
         <button
           type="submit"
           className="w-full mt-4 py-3.5 px-4 bg-blue-600 hover:bg-blue-700 active:scale-[0.99] text-white rounded-xl font-bold text-sm shadow-md shadow-blue-500/20 transition-all cursor-pointer flex items-center justify-center gap-2"
         >
-          <Radio className="w-4 h-4 text-cyan-300" />
-          <span>Koneksikan & Aktifkan Kartu NFC 13.56 MHz</span>
+          <span>Selesai · Kartu Siap Digunakan</span>
+          <ArrowRight className="w-4 h-4" />
         </button>
       </form>
+
+      {/* QR Scanner Modal */}
+      {showScanQrModal && (
+        <ScanQrModal
+          currentCardId={activeCardId}
+          onCardDetected={(detectedId) => {
+            setActiveCardId(detectedId);
+            setNfcDetected(true);
+            setShowScanQrModal(false);
+          }}
+          onClose={() => setShowScanQrModal(false)}
+        />
+      )}
     </div>
   );
 };
