@@ -1,0 +1,6 @@
+{
+  "name": "Kartu Ulasan NFC - Smart Review Card",
+  "description": "Aplikasi simulator dan manajemen kartu ulasan NFC untuk Google Review bisnis dengan filter ulasan pintar & WhatsApp feedback.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
