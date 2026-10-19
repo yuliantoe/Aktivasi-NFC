@@ -166,8 +166,16 @@ export class NfcService {
     url: string,
     onSuccess: (uid: string) => void,
     onError: (error: string) => void,
-    abortSignal?: AbortSignal
+    abortSignal?: AbortSignal,
+    allowSimulatedOnDesktop = false
   ): Promise<void> {
+    const normalizedUrl =
+      url.startsWith('http://') || url.startsWith('https://')
+        ? url
+        : typeof window !== 'undefined'
+        ? `${window.location.origin}${url.startsWith('/') ? '' : '/'}${url}`
+        : url;
+
     if (isWebNfcSupported()) {
       try {
         const NDEFReaderClass = (window as any).NDEFReader;
@@ -179,7 +187,7 @@ export class NfcService {
             records: [
               {
                 recordType: 'url',
-                data: url,
+                data: normalizedUrl,
               },
             ],
           },
@@ -195,7 +203,7 @@ export class NfcService {
         onSuccess(generate1356Uid());
       } catch (err: any) {
         if (err.name === 'NotAllowedError') {
-          onError('Izin NFC ditolak atau NFC di pengaturan HP Anda belum dinyalakan. Masuk ke Pengaturan HP > Koneksi > Nyalakan NFC.');
+          onError('Izin NFC ditolak atau NFC di HP dalam kondisi nonaktif. Buka Pengaturan HP > Koneksi > Nyalakan NFC.');
         } else if (err.name === 'NotSupportedError') {
           onError('Tipe kartu/tag NFC ini tidak didukung atau kapasitas memorinya terlalu kecil.');
         } else if (err.name === 'NotReadableError') {
@@ -207,9 +215,17 @@ export class NfcService {
         }
       }
     } else {
-      // If Web NFC is not available on this browser/device
-      const diagnostic = getNfcDiagnostic();
-      onError(`Browser ini belum mendukung Web NFC secara langsung (${diagnostic.platformDescription}). ${diagnostic.recommendation}`);
+      if (allowSimulatedOnDesktop) {
+        // Desktop test simulation
+        setTimeout(() => {
+          onSuccess(generate1356Uid());
+        }, 1200);
+      } else {
+        const diagnostic = getNfcDiagnostic();
+        onError(
+          `Browser ini belum mendukung Web NFC hardware secara langsung (${diagnostic.platformDescription}). ${diagnostic.recommendation}`
+        );
+      }
     }
   }
 }

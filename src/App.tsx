@@ -17,6 +17,8 @@ import {
   MapPin,
 } from 'lucide-react';
 
+import { parseCardFromUrlParams, buildGoogleMapsSearchUrl } from './data/presets';
+
 export default function App() {
   const [card, setCard] = useState<CardData | null>(null);
   const [cardId, setCardId] = useState<string>('A7K2');
@@ -38,8 +40,41 @@ export default function App() {
     negativeIntercepted: 3,
   });
 
-  // Load from localStorage ('kartu-demo' compatibility)
+  // Load from URL query parameters (NFC Tap on phone) or localStorage
   useEffect(() => {
+    // 1. Check if opened directly by NFC Tap on a mobile phone (e.g. ?tap=nfc&name=...)
+    try {
+      if (typeof window !== 'undefined' && window.location.search) {
+        const urlCard = parseCardFromUrlParams(window.location.search);
+        if (urlCard && urlCard.name) {
+          const loadedCard: CardData = {
+            id: urlCard.id || 'A7K2',
+            placeId: urlCard.placeId,
+            name: urlCard.name,
+            addr: urlCard.addr || 'Lokasi Bisnis di Google Maps',
+            wa: urlCard.wa || '628123456789',
+            pin: '1234',
+            customUrl: urlCard.customUrl,
+            googleMapsUrl: urlCard.googleMapsUrl || buildGoogleMapsSearchUrl(urlCard.name, urlCard.addr),
+            colorTheme: 'midnight',
+            createdAt: new Date().toISOString(),
+            nfcUid: '04:A8:1F:B3:2E:77:9C',
+            nfcFrequency: '13.56 MHz',
+            nfcChipType: 'NTAG213 (13.56 MHz ISO/IEC 14443-A)',
+            nfcStatus: 'connected',
+            lastNfcSync: new Date().toISOString(),
+          };
+          setCard(loadedCard);
+          // Directly enter review menu!
+          setViewMode('customer');
+          return;
+        }
+      }
+    } catch (e) {
+      console.error('Error parsing NFC tap URL params:', e);
+    }
+
+    // 2. Load from localStorage ('kartu-demo' compatibility)
     try {
       const stored = localStorage.getItem('kartu-demo');
       if (stored) {
@@ -52,7 +87,7 @@ export default function App() {
             addr: parsed.addr || 'Jl. Tebet Raya, Jakarta Selatan',
             wa: parsed.wa,
             pin: parsed.pin || '1234',
-            customUrl: parsed.customUrl || (parsed.name ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${parsed.name} ${parsed.addr || ''}`.trim())}` : undefined),
+            customUrl: parsed.customUrl || (parsed.name ? buildGoogleMapsSearchUrl(parsed.name, parsed.addr) : undefined),
             colorTheme: parsed.colorTheme || 'midnight',
             createdAt: parsed.createdAt,
             nfcUid: parsed.nfcUid || '04:A8:1F:B3:2E:77:9C',
@@ -60,7 +95,7 @@ export default function App() {
             nfcChipType: parsed.nfcChipType || 'NTAG213 (13.56 MHz ISO/IEC 14443-A)',
             nfcStatus: parsed.nfcStatus || 'connected',
             lastNfcSync: parsed.lastNfcSync,
-            googleMapsUrl: parsed.googleMapsUrl,
+            googleMapsUrl: parsed.googleMapsUrl || (parsed.name ? buildGoogleMapsSearchUrl(parsed.name, parsed.addr) : undefined),
             googleMapsRating: parsed.googleMapsRating,
             googleMapsTotalReviews: parsed.googleMapsTotalReviews,
           });

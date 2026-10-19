@@ -1,8 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
+import QRCode from 'qrcode';
 import { CardData } from '../types';
 import { isWebNfcSupported, NfcService, generate1356Uid, getNfcDiagnostic } from '../utils/nfc';
 import { sound } from '../utils/audio';
-import { getGoogleReviewUrl } from '../data/presets';
+import { getGoogleReviewUrl, buildNfcSmartReviewUrl, buildGoogleMapsSearchUrl } from '../data/presets';
 import {
   Wifi,
   Radio,
@@ -18,6 +19,10 @@ import {
   ExternalLink,
   HelpCircle,
   Sparkles,
+  QrCode as QrIcon,
+  Send,
+  Play,
+  Share2,
 } from 'lucide-react';
 
 interface NfcConnectionModalProps {
@@ -34,14 +39,29 @@ export const NfcConnectionModal: React.FC<NfcConnectionModalProps> = ({
   const diagnostic = getNfcDiagnostic();
   const hasHardwareNfc = diagnostic.hasWebNfc;
 
-  const [activeTab, setActiveTab] = useState<'direct_write' | 'nfc_tools' | 'read_scan'>('direct_write');
+  const [activeTab, setActiveTab] = useState<'direct_write' | 'phone_transfer' | 'nfc_tools' | 'read_scan'>('direct_write');
+  const [urlMode, setUrlMode] = useState<'smart_review' | 'direct_google'>('smart_review');
   const [status, setStatus] = useState<'idle' | 'writing' | 'reading' | 'success' | 'error'>('idle');
   const [statusMessage, setStatusMessage] = useState<string>('');
   const [scannedUid, setScannedUid] = useState<string>(card.nfcUid || '04:A8:1F:B3:2E:77:9C');
   const [copiedUrl, setCopiedUrl] = useState(false);
+  const [copiedPhoneLink, setCopiedPhoneLink] = useState(false);
+  const [phoneQrDataUrl, setPhoneQrDataUrl] = useState<string>('');
 
   const abortControllerRef = useRef<AbortController | null>(null);
-  const targetUrl = getGoogleReviewUrl(card.placeId, card.customUrl, card.name, card.addr);
+
+  // Compute URLs
+  const smartReviewUrl = buildNfcSmartReviewUrl(card);
+  const directGoogleUrl = getGoogleReviewUrl(card.placeId, card.customUrl, card.name, card.addr);
+  const targetUrl = urlMode === 'smart_review' ? smartReviewUrl : directGoogleUrl;
+
+  // Generate QR code for phone transfer
+  useEffect(() => {
+    const originUrl = typeof window !== 'undefined' ? window.location.href : '';
+    QRCode.toDataURL(originUrl, { margin: 1, width: 220, color: { dark: '#0f172a', light: '#ffffff' } })
+      .then((url) => setPhoneQrDataUrl(url))
+      .catch((err) => console.error('Failed to generate phone transfer QR:', err));
+  }, []);
 
   // Clean up any ongoing NFC write/read session when modal closes or unmounts
   useEffect(() => {
@@ -52,7 +72,7 @@ export const NfcConnectionModal: React.FC<NfcConnectionModalProps> = ({
     };
   }, []);
 
-  const handleStartWrite = async () => {
+  const handleStartWrite = async (isTestSimulated = false) => {
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
     }
@@ -69,7 +89,11 @@ export const NfcConnectionModal: React.FC<NfcConnectionModalProps> = ({
         (uid) => {
           setStatus('success');
           setScannedUid(uid);
-          setStatusMessage('Berhasil! Tautan ulasan Google berhasil ditulis ke dalam chip NFC 13.56 MHz.');
+          setStatusMessage(
+            urlMode === 'smart_review'
+              ? 'Berhasil! Kartu NFC 13.56 MHz terhubung ke Menu Ulasan Pintar. Saat pelanggan menempelkan HP ke kartu, langsung masuk ke Menu Ulasan!'
+              : 'Berhasil! Kartu NFC 13.56 MHz terhubung langsung ke profil ulasan Google Maps.'
+          );
           sound.playSuccess();
 
           onUpdateCardNfc({
@@ -85,7 +109,8 @@ export const NfcConnectionModal: React.FC<NfcConnectionModalProps> = ({
           setStatusMessage(err);
           sound.playStarPing(0);
         },
-        ac.signal
+        ac.signal,
+        isTestSimulated
       );
     } catch (e: any) {
       if (e.name !== 'AbortError') {
@@ -151,21 +176,30 @@ export const NfcConnectionModal: React.FC<NfcConnectionModalProps> = ({
     setTimeout(() => setCopiedUrl(false), 2000);
   };
 
+  const handleCopyPhoneLink = () => {
+    if (typeof window !== 'undefined') {
+      navigator.clipboard.writeText(window.location.href);
+      setCopiedPhoneLink(true);
+      sound.playStarPing(3);
+      setTimeout(() => setCopiedPhoneLink(false), 2000);
+    }
+  };
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm animate-fade-in overflow-y-auto">
-      <div className="relative w-full max-w-md bg-white rounded-3xl p-5 sm:p-6 shadow-2xl border border-slate-100 flex flex-col my-auto max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/75 backdrop-blur-sm animate-fade-in overflow-y-auto">
+      <div className="relative w-full max-w-lg bg-white rounded-3xl p-5 sm:p-6 shadow-2xl border border-slate-100 flex flex-col my-auto max-h-[92vh] overflow-y-auto">
         {/* Header */}
         <div className="flex items-center justify-between pb-3 border-b border-slate-100">
           <div className="flex items-center gap-2.5">
-            <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
-              <Radio className="w-5 h-5" />
+            <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+              <Radio className="w-5 h-5 text-blue-600" />
             </div>
             <div>
               <h3 className="text-base font-bold text-slate-900 font-display">
                 Koneksi Kartu NFC 13.56 MHz
               </h3>
               <p className="text-[11px] text-slate-500">
-                Tulis tautan Google Review ke chip fisik NTAG213/215/216
+                Input data ulasan {card.name} dari website ke chip NFC fisik
               </p>
             </div>
           </div>
@@ -180,21 +214,91 @@ export const NfcConnectionModal: React.FC<NfcConnectionModalProps> = ({
           </button>
         </div>
 
+        {/* URL Target Choice: Smart Review Menu vs Direct Google Maps */}
+        <div className="mt-3.5 p-3 rounded-2xl bg-gradient-to-r from-blue-50/80 to-indigo-50/80 border border-blue-200/80 space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-bold text-blue-900 uppercase tracking-wider">
+              Tujuan Tautan Saat Kartu Ditap di HP:
+            </span>
+            <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-blue-200 text-blue-900 font-bold">
+              13.56 MHz NDEF
+            </span>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2 text-xs">
+            <button
+              type="button"
+              onClick={() => {
+                setUrlMode('smart_review');
+                sound.playStarPing(1);
+              }}
+              className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
+                urlMode === 'smart_review'
+                  ? 'bg-white border-blue-600 shadow-sm text-blue-950 ring-2 ring-blue-500/20'
+                  : 'bg-white/60 border-slate-200 text-slate-600 hover:bg-white'
+              }`}
+            >
+              <div className="flex items-center gap-1.5 font-bold text-xs">
+                <Sparkles className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                <span>Menu Ulasan Pintar</span>
+              </div>
+              <p className="text-[10px] text-slate-500 mt-1 leading-snug">
+                (Rekomendasi) Pelanggan langsung masuk menu ulasan. Bintang 4-5 ke Google Maps, 1-3 difilter ke WA.
+              </p>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setUrlMode('direct_google');
+                sound.playStarPing(1);
+              }}
+              className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
+                urlMode === 'direct_google'
+                  ? 'bg-white border-blue-600 shadow-sm text-blue-950 ring-2 ring-blue-500/20'
+                  : 'bg-white/60 border-slate-200 text-slate-600 hover:bg-white'
+              }`}
+            >
+              <div className="flex items-center gap-1.5 font-bold text-xs">
+                <ExternalLink className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                <span>Langsung Google Maps</span>
+              </div>
+              <p className="text-[10px] text-slate-500 mt-1 leading-snug">
+                Buka halaman Google Maps bisnis secara langsung (bebas 404) tanpa form ulasan web.
+              </p>
+            </button>
+          </div>
+        </div>
+
         {/* Tab selection */}
-        <div className="flex gap-1 p-1 bg-slate-100 rounded-xl mt-3 text-xs font-semibold">
+        <div className="grid grid-cols-3 gap-1 p-1 bg-slate-100 rounded-xl mt-3 text-xs font-semibold">
           <button
             type="button"
             onClick={() => {
               handleCancelNfc();
               setActiveTab('direct_write');
             }}
-            className={`flex-1 py-2 px-2 rounded-lg transition-all cursor-pointer text-center ${
+            className={`py-2 px-1 rounded-lg transition-all cursor-pointer text-center truncate ${
               activeTab === 'direct_write'
-                ? 'bg-white text-blue-700 shadow-sm'
+                ? 'bg-white text-blue-700 shadow-sm font-bold'
                 : 'text-slate-600 hover:text-slate-900'
             }`}
           >
-            Tulis Langsung (Web NFC)
+            Tulis Web NFC
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              handleCancelNfc();
+              setActiveTab('phone_transfer');
+            }}
+            className={`py-2 px-1 rounded-lg transition-all cursor-pointer text-center truncate ${
+              activeTab === 'phone_transfer'
+                ? 'bg-white text-blue-700 shadow-sm font-bold'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            Buka di HP Anda
           </button>
           <button
             type="button"
@@ -202,27 +306,13 @@ export const NfcConnectionModal: React.FC<NfcConnectionModalProps> = ({
               handleCancelNfc();
               setActiveTab('nfc_tools');
             }}
-            className={`flex-1 py-2 px-2 rounded-lg transition-all cursor-pointer text-center ${
+            className={`py-2 px-1 rounded-lg transition-all cursor-pointer text-center truncate ${
               activeTab === 'nfc_tools'
-                ? 'bg-white text-blue-700 shadow-sm'
+                ? 'bg-white text-blue-700 shadow-sm font-bold'
                 : 'text-slate-600 hover:text-slate-900'
             }`}
           >
             Aplikasi NFC Tools
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              handleCancelNfc();
-              setActiveTab('read_scan');
-            }}
-            className={`flex-1 py-2 px-2 rounded-lg transition-all cursor-pointer text-center ${
-              activeTab === 'read_scan'
-                ? 'bg-white text-blue-700 shadow-sm'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            Baca UID Tag
           </button>
         </div>
 
@@ -240,7 +330,7 @@ export const NfcConnectionModal: React.FC<NfcConnectionModalProps> = ({
                   : 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
               }`}
             >
-              {hasHardwareNfc ? '✓ Web NFC Aktif' : 'NFC via App/Desktop'}
+              {hasHardwareNfc ? '✓ Web NFC Aktif' : 'NFC Sensor di HP'}
             </span>
           </div>
           <p className="text-[11px] text-slate-300 leading-relaxed">
@@ -250,15 +340,15 @@ export const NfcConnectionModal: React.FC<NfcConnectionModalProps> = ({
 
         {/* TAB 1: Direct Web NFC Write */}
         {activeTab === 'direct_write' && (
-          <div className="mt-4 space-y-4">
+          <div className="mt-3 space-y-3.5">
             {/* Visualizer & Contact Animation */}
-            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 flex flex-col items-center text-center relative overflow-hidden">
-              <div className="relative w-36 h-36 flex items-center justify-center my-2">
+            <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 flex flex-col items-center text-center relative overflow-hidden">
+              <div className="relative w-32 h-32 flex items-center justify-center my-1">
                 {status === 'writing' && (
                   <>
                     <span className="absolute w-20 h-20 rounded-full border-2 border-blue-500 animate-ping" />
-                    <span className="absolute w-32 h-32 rounded-full border border-cyan-400 animate-ping [animation-delay:200ms]" />
-                    <span className="absolute w-40 h-40 rounded-full border border-cyan-300/50 animate-ping [animation-delay:400ms]" />
+                    <span className="absolute w-28 h-28 rounded-full border border-cyan-400 animate-ping [animation-delay:200ms]" />
+                    <span className="absolute w-36 h-36 rounded-full border border-cyan-300/50 animate-ping [animation-delay:400ms]" />
                   </>
                 )}
 
@@ -279,7 +369,7 @@ export const NfcConnectionModal: React.FC<NfcConnectionModalProps> = ({
                   <div className="w-5 h-3 rounded bg-amber-400/90" />
                   <div>
                     <p className="text-[9px] font-bold truncate text-white">{card.name}</p>
-                    <p className="text-[7.5px] font-mono text-slate-400">UID: {scannedUid.slice(0, 11)}...</p>
+                    <p className="text-[7.5px] font-mono text-slate-400 truncate">UID: {scannedUid.slice(0, 11)}...</p>
                   </div>
                 </div>
               </div>
@@ -287,9 +377,11 @@ export const NfcConnectionModal: React.FC<NfcConnectionModalProps> = ({
               {/* Status Indicator */}
               {status === 'idle' && (
                 <div className="text-xs text-slate-600">
-                  <p className="font-bold text-slate-800">Siap Menulis ke Tag NFC 13.56 MHz</p>
+                  <p className="font-bold text-slate-800">
+                    Siap Memasukkan Data ke Tag NFC 13.56 MHz
+                  </p>
                   <p className="text-[11px] text-slate-500 mt-0.5">
-                    Klik tombol di bawah lalu tempelkan kartu/stiker NFC ke bodi belakang smartphone Anda.
+                    Klik tombol di bawah lalu tempelkan kartu NFC ke bagian belakang bodi smartphone Anda.
                   </p>
                 </div>
               )}
@@ -298,10 +390,10 @@ export const NfcConnectionModal: React.FC<NfcConnectionModalProps> = ({
                 <div className="inline-flex flex-col items-center gap-1 text-xs">
                   <span className="px-3 py-1 rounded-full bg-blue-100 text-blue-800 font-bold flex items-center gap-1.5 animate-pulse">
                     <Radio className="w-3.5 h-3.5 animate-spin text-blue-600" />
-                    Mendeteksi Kartu NFC...
+                    Mendeteksi Kartu NFC 13.56 MHz...
                   </span>
                   <p className="text-[11.5px] text-slate-700 font-medium mt-1">
-                    Tempelkan kartu NFC ke bagian belakang HP & tahan 1-2 detik hingga HP bergetar.
+                    Tempelkan kartu ke bodi belakang HP Anda & tahan 1–2 detik sampai HP bergetar.
                   </p>
                 </div>
               )}
@@ -310,10 +402,10 @@ export const NfcConnectionModal: React.FC<NfcConnectionModalProps> = ({
                 <div className="inline-flex flex-col items-center gap-1 text-xs text-emerald-800">
                   <div className="px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 font-bold flex items-center gap-1.5">
                     <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                    Sukses Ditulis ke Chip 13.56 MHz!
+                    Sukses Ditulis ke Chip NFC!
                   </div>
                   <p className="text-[11px] text-slate-600 mt-1">
-                    Tag UID: <strong className="font-mono text-slate-800">{scannedUid}</strong>
+                    Tag UID: <strong className="font-mono text-slate-800">{scannedUid}</strong> · Kartu siap ditap oleh pelanggan!
                   </p>
                 </div>
               )}
@@ -330,10 +422,13 @@ export const NfcConnectionModal: React.FC<NfcConnectionModalProps> = ({
             </div>
 
             {/* Target URL details */}
-            <div className="p-3 rounded-xl bg-blue-50/60 border border-blue-100 text-xs space-y-1">
-              <span className="text-[10.5px] font-bold text-blue-800 block uppercase">
-                Tautan Ulasan yang Dimasukkan ke Chip:
-              </span>
+            <div className="p-3 rounded-xl bg-blue-50/70 border border-blue-100 text-xs space-y-1">
+              <div className="flex items-center justify-between text-[10.5px] font-bold text-blue-800 uppercase">
+                <span>Tautan yang Dimasukkan ke Chip:</span>
+                <span className="text-[10px] text-slate-500 font-normal">
+                  {urlMode === 'smart_review' ? 'Menu Ulasan Pintar' : 'Google Maps'}
+                </span>
+              </div>
               <p className="font-mono text-[11px] text-slate-800 break-all select-all">
                 {targetUrl}
               </p>
@@ -343,7 +438,7 @@ export const NfcConnectionModal: React.FC<NfcConnectionModalProps> = ({
             <div className="space-y-2">
               <button
                 type="button"
-                onClick={handleStartWrite}
+                onClick={() => handleStartWrite(false)}
                 disabled={status === 'writing'}
                 className="w-full py-3.5 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 active:scale-[0.99] text-white font-bold text-sm shadow-md shadow-blue-500/20 transition-all cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50"
               >
@@ -351,9 +446,23 @@ export const NfcConnectionModal: React.FC<NfcConnectionModalProps> = ({
                 <span>
                   {status === 'writing'
                     ? 'Sedang Menunggu Tempelan Kartu...'
-                    : 'Mulai Tulis ke Tag NFC Sekarang'}
+                    : hasHardwareNfc
+                    ? 'Mulai Tulis ke Tag NFC Sekarang'
+                    : 'Tulis ke Tag NFC (HP Android Chrome)'}
                 </span>
               </button>
+
+              {!hasHardwareNfc && (
+                <button
+                  type="button"
+                  onClick={() => handleStartWrite(true)}
+                  disabled={status === 'writing'}
+                  className="w-full py-2.5 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs transition-colors cursor-pointer flex items-center justify-center gap-1.5"
+                >
+                  <Play className="w-3.5 h-3.5 text-slate-600" />
+                  <span>Simulasi Tulis ke Kartu (Mode Pengujian di Desktop)</span>
+                </button>
+              )}
 
               {status === 'writing' && (
                 <button
@@ -368,34 +477,83 @@ export const NfcConnectionModal: React.FC<NfcConnectionModalProps> = ({
 
             {/* Quick Checklist */}
             <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-[11px] text-slate-600 space-y-1.5">
-              <p className="font-bold text-slate-800">Tips jika belum merespons:</p>
+              <p className="font-bold text-slate-800">Panduan Praktis Menulis NFC dari HP:</p>
               <ul className="list-disc pl-4 space-y-1 text-slate-500">
-                <li>Buka <strong>Pengaturan HP &gt; Koneksi &gt; NFC</strong> dan pastikan statusnya <strong>AKTIF</strong>.</li>
-                <li>Gunakan browser <strong>Google Chrome di Android</strong>.</li>
-                <li>Lepas casing tebal HP bila menghalangi gelombang antena 13.56 MHz.</li>
-                <li>Letak sensor NFC HP biasanya di bagian tengah belakang atau dekat kamera.</li>
+                <li>Buka website ini di <strong>Google Chrome HP Android</strong>.</li>
+                <li>Nyalakan NFC di <strong>Pengaturan HP &gt; Koneksi &gt; NFC</strong>.</li>
+                <li>Tempelkan kartu NFC 13.56 MHz (NTAG213/215) ke bagian tengah/atas bodi belakang HP.</li>
+                <li>Tahan selama 1-2 detik hingga terdengar bunyi getar / konfirmasi sukses.</li>
               </ul>
             </div>
           </div>
         )}
 
-        {/* TAB 2: Universal NFC Tools App Guide */}
+        {/* TAB 2: Transfer Session to Phone */}
+        {activeTab === 'phone_transfer' && (
+          <div className="mt-3 space-y-3.5 text-xs text-slate-700">
+            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 text-center flex flex-col items-center">
+              <span className="text-xs font-bold text-slate-900 mb-1">
+                Buka Dasbor Ini Langsung di Handphone Anda
+              </span>
+              <p className="text-[11.5px] text-slate-500 max-w-xs mb-3">
+                Scan QR Code ini menggunakan kamera HP Anda untuk membuka dasbor ini di Google Chrome HP, sehingga sensor NFC HP bisa langsung menulis ke kartu.
+              </p>
+
+              {phoneQrDataUrl ? (
+                <div className="p-3 bg-white rounded-2xl border border-slate-200 shadow-sm">
+                  <img
+                    src={phoneQrDataUrl}
+                    alt="Scan untuk buka di HP"
+                    className="w-44 h-44 rounded-lg mx-auto"
+                  />
+                </div>
+              ) : (
+                <div className="w-44 h-44 rounded-2xl bg-slate-100 flex items-center justify-center text-slate-400">
+                  <RefreshCw className="w-6 h-6 animate-spin" />
+                </div>
+              )}
+
+              <div className="mt-3 flex items-center gap-2 w-full max-w-xs">
+                <button
+                  type="button"
+                  onClick={handleCopyPhoneLink}
+                  className="flex-1 py-2 px-3 bg-white border border-slate-200 hover:bg-slate-50 rounded-xl font-bold text-xs text-slate-700 flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                >
+                  {copiedPhoneLink ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                  <span>{copiedPhoneLink ? 'Link Tersalin!' : 'Salin Link'}</span>
+                </button>
+
+                <a
+                  href={`https://wa.me/?text=${encodeURIComponent(`Buka dasbor Kartu Ulasan NFC di Google Chrome HP: ${typeof window !== 'undefined' ? window.location.href : ''}`)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex-1 py-2 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-colors"
+                >
+                  <Send className="w-3.5 h-3.5" />
+                  <span>Kirim ke WhatsApp</span>
+                </a>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* TAB 3: Universal NFC Tools App Guide */}
         {activeTab === 'nfc_tools' && (
-          <div className="mt-4 space-y-4 text-xs text-slate-700">
-            <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 space-y-2">
+          <div className="mt-3 space-y-3.5 text-xs text-slate-700">
+            <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 space-y-1.5">
               <div className="flex items-center gap-2 font-bold text-amber-900">
                 <Sparkles className="w-4 h-4 text-amber-600 shrink-0" />
                 <span>Cara Paling Universal & Cepat (Android & iPhone):</span>
               </div>
               <p className="text-[11.5px] text-amber-800 leading-relaxed">
-                Jika browser HP Anda memblokir izin Web NFC, Anda bisa menggunakan aplikasi gratis <strong>"NFC Tools"</strong> (standar resmi industri untuk tulis tag NTAG213/215).
+                Aplikasi gratis <strong>"NFC Tools"</strong> adalah standar industri untuk menulis tag NFC 13.56 MHz (NTAG213/215). Bekerja 100% di semua HP Android dan iPhone!
               </p>
             </div>
 
             {/* Copy Review Link Box */}
             <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
               <span className="font-bold text-slate-800 block text-xs">
-                Langkah 1: Salin Tautan Ulasan Google Anda
+                Langkah 1: Salin Tautan Ulasan {card.name}
               </span>
               <div className="flex items-center gap-2">
                 <input
@@ -416,99 +574,31 @@ export const NfcConnectionModal: React.FC<NfcConnectionModalProps> = ({
             </div>
 
             {/* Step by Step Guide */}
-            <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 space-y-2.5">
+            <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
               <span className="font-bold text-slate-800 block text-xs">
-                Langkah 2: Tulis ke Tag NFC dengan NFC Tools
+                Langkah 2: Tulis ke Tag NFC di HP Anda
               </span>
               <ol className="list-decimal pl-4 space-y-1.5 text-[11.5px] text-slate-600">
                 <li>
-                  Download aplikasi <strong>NFC Tools</strong> (gratis di Play Store untuk Android atau App Store untuk iPhone).
+                  Download aplikasi <strong>NFC Tools</strong> (gratis di Google Play Store atau Apple App Store).
                 </li>
-                <li>Buka aplikasi NFC Tools &gt; Pilih tab <strong>"Write" (Tulis)</strong>.</li>
+                <li>Buka aplikasi NFC Tools &gt; Pilih menu <strong>"Write" (Tulis)</strong>.</li>
                 <li>
-                  Pilih <strong>"Add a record"</strong> &gt; pilih <strong>"Custom URL / URI"</strong>.
-                </li>
-                <li>
-                  Tempelkan (Paste) link ulasan yang sudah disalin tadi &gt; klik <strong>OK</strong>.
+                  Klik <strong>"Add a record"</strong> &gt; pilih <strong>"Custom URL / URI"</strong>.
                 </li>
                 <li>
-                  Klik tombol <strong>"Write / [ukuran byte]"</strong>, lalu tempelkan kartu/stiker NFC 13.56 MHz Anda ke belakang HP.
+                  Paste (tempel) tautan ulasan yang sudah disalin di atas &gt; klik <strong>OK</strong>.
                 </li>
                 <li>
-                  Selesai! Kartu Anda sekarang langsung membuka ulasan bisnis saat di-tap oleh siapa saja.
+                  Klik tombol <strong>"Write / [ukuran byte]"</strong>, lalu tempelkan kartu NFC 13.56 MHz ke belakang bodi HP.
+                </li>
+                <li>
+                  Selesai! Kartu NFC siap digunakan. Saat pelanggan menempelkan HP ke kartu, langsung masuk ke Menu Ulasan!
                 </li>
               </ol>
             </div>
           </div>
         )}
-
-        {/* TAB 3: Read & Diagnostic Tag Scan */}
-        {activeTab === 'read_scan' && (
-          <div className="mt-4 space-y-4">
-            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 text-center space-y-3">
-              <div className="w-12 h-12 rounded-2xl bg-cyan-50 text-cyan-700 flex items-center justify-center mx-auto">
-                <Cpu className="w-6 h-6" />
-              </div>
-              <div>
-                <h4 className="font-bold text-slate-900 text-sm">Pindai & Cek Spesifikasi Tag</h4>
-                <p className="text-xs text-slate-500 mt-1">
-                  Membaca nomor serial UID dan kapasitas chip 13.56 MHz yang ditempelkan.
-                </p>
-              </div>
-
-              {status === 'reading' && (
-                <div className="p-2.5 rounded-xl bg-blue-100 text-blue-800 text-xs font-semibold animate-pulse flex items-center justify-center gap-2">
-                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                  <span>Mendekatkan kartu NFC 13.56 MHz ke sensor HP...</span>
-                </div>
-              )}
-
-              {status === 'success' && (
-                <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-left text-xs space-y-1">
-                  <div className="flex items-center gap-1.5 text-emerald-800 font-bold">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                    <span>Kartu 13.56 MHz Terbaca:</span>
-                  </div>
-                  <div className="grid grid-cols-2 gap-1 pt-1 font-mono text-[11px]">
-                    <span className="text-slate-500">Tag UID:</span>
-                    <span className="font-bold text-slate-900">{scannedUid}</span>
-                    <span className="text-slate-500">Frekuensi:</span>
-                    <span className="text-slate-900">13.56 MHz High-Frequency</span>
-                    <span className="text-slate-500">Standar:</span>
-                    <span className="text-slate-900">ISO/IEC 14443 Type A</span>
-                  </div>
-                </div>
-              )}
-
-              <button
-                type="button"
-                onClick={handleStartRead}
-                disabled={status === 'reading'}
-                className="w-full py-3 px-4 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs flex items-center justify-center gap-2 cursor-pointer transition-colors"
-              >
-                <Radio className="w-3.5 h-3.5 text-cyan-400" />
-                <span>{status === 'reading' ? 'Menunggu Tempelan Tag...' : 'Mulai Scan Kartu NFC'}</span>
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Footer actions */}
-        <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
-          <span className="text-[11px] font-mono text-slate-400">
-            NFC 13.56 MHz (ISO 14443-A)
-          </span>
-          <button
-            type="button"
-            onClick={() => {
-              handleCancelNfc();
-              onClose();
-            }}
-            className="px-3.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold cursor-pointer transition-colors"
-          >
-            Tutup
-          </button>
-        </div>
       </div>
     </div>
   );

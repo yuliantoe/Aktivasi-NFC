@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { CardData, ReviewStats } from '../types';
-import { getGoogleReviewUrl, formatWhatsAppDisplay, buildGoogleMapsSearchUrl } from '../data/presets';
+import { getGoogleReviewUrl, formatWhatsAppDisplay, buildGoogleMapsSearchUrl, buildNfcSmartReviewUrl } from '../data/presets';
 import {
   Check,
   Copy,
@@ -16,6 +16,7 @@ import {
   MapPin,
   Cpu,
   Wifi,
+  Sparkles,
 } from 'lucide-react';
 import { sound } from '../utils/audio';
 
@@ -38,23 +39,25 @@ export const ActiveDashboard: React.FC<ActiveDashboardProps> = ({
   onOpenSettings,
   onResetCard,
 }) => {
-  const [copied, setCopied] = useState(false);
+  const [copiedReviewUrl, setCopiedReviewUrl] = useState(false);
   const reviewUrl = getGoogleReviewUrl(card.placeId, card.customUrl, card.name, card.addr);
   const mapsSearchUrl = card.googleMapsUrl || buildGoogleMapsSearchUrl(card.name, card.addr);
+  const smartReviewUrl = buildNfcSmartReviewUrl(card);
 
-  const handleCopyLink = () => {
-    navigator.clipboard.writeText(reviewUrl);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+  const handleCopyReviewUrl = () => {
+    navigator.clipboard.writeText(smartReviewUrl);
+    setCopiedReviewUrl(true);
+    sound.playStarPing(3);
+    setTimeout(() => setCopiedReviewUrl(false), 2000);
   };
 
   return (
     <div>
-      {/* Steps bar */}
-      <div className="flex gap-1.5 mb-5">
-        <span className="flex-1 h-1 rounded-full bg-blue-600" />
-        <span className="flex-1 h-1 rounded-full bg-blue-600" />
-        <span className="flex-1 h-1 rounded-full bg-slate-200" />
+      {/* Steps progress bar */}
+      <div className="flex gap-1.5 mb-4">
+        <span className="flex-1 h-1.5 rounded-full bg-blue-600" />
+        <span className="flex-1 h-1.5 rounded-full bg-blue-600" />
+        <span className="flex-1 h-1.5 rounded-full bg-blue-600" />
       </div>
 
       {/* Status Badges Header: Active Card & 13.56 MHz NFC */}
@@ -65,24 +68,37 @@ export const ActiveDashboard: React.FC<ActiveDashboardProps> = ({
         </span>
         <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-mono font-bold bg-slate-900 text-cyan-300 border border-slate-700">
           <Radio className="w-3 h-3 text-cyan-400" />
-          13.56 MHz NFC
+          13.56 MHz ISO 14443-A
         </span>
       </div>
 
-      {/* Main Title */}
+      {/* Main Title & User Direct Action Notification */}
       <h1 className="text-2xl font-extrabold tracking-tight text-slate-900 font-display text-center">
-        {card.name} siap menerima ulasan
+        {card.name}
       </h1>
       <p className="text-xs text-slate-500 text-center mt-1 leading-relaxed">
-        Aktivasi selesai. Letakkan kartu di meja kasir Anda untuk mulai menerima ulasan Google Maps dari pelanggan.
+        {card.addr || 'Profil bisnis terhubung ke Google Maps'}
       </p>
 
-      {/* Google Maps Connection Card */}
-      <div className="mt-4 p-3.5 rounded-2xl bg-gradient-to-br from-blue-50/70 to-emerald-50/60 border border-blue-200/80 text-left">
+      {/* Highlight Box: Direct Entry to Review Menu on Tap */}
+      <div className="mt-3.5 p-3 rounded-2xl bg-blue-50/80 border border-blue-200 text-blue-900 flex items-start gap-2.5 text-xs">
+        <Sparkles className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+        <div>
+          <strong className="block text-blue-950 font-bold">
+            Langsung Masuk ke Menu Ulasan saat NFC di-tap:
+          </strong>
+          <span className="text-[11.5px] text-blue-800 leading-relaxed block mt-0.5">
+            Saat pelanggan menempelkan smartphone ke kartu NFC ini, HP otomatis membuka <strong>Menu Ulasan {card.name}</strong>. Rating 4–5 diarahkan ke Google Review, rating 1–3 dialihkan ke WhatsApp pemilik.
+          </span>
+        </div>
+      </div>
+
+      {/* Google Maps Connection Card (Guaranteed NO 404) */}
+      <div className="mt-3 p-3.5 rounded-2xl bg-gradient-to-br from-emerald-50/70 to-blue-50/60 border border-emerald-200/80 text-left">
         <div className="flex items-center justify-between text-[11px] font-bold text-slate-700 mb-1.5">
-          <span className="flex items-center gap-1.5 text-blue-700">
+          <span className="flex items-center gap-1.5 text-emerald-800 font-bold">
             <MapPin className="w-3.5 h-3.5 text-red-500" />
-            Terkoneksi Google Maps
+            Terkoneksi Google Maps (Bebas 404)
           </span>
           {card.googleMapsRating && (
             <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 font-bold text-[10.5px]">
@@ -95,19 +111,15 @@ export const ActiveDashboard: React.FC<ActiveDashboardProps> = ({
           )}
         </div>
 
-        <p className="text-xs text-slate-600 line-clamp-1 mb-2 font-mono">
-          ID: {card.placeId}
-        </p>
-
-        <div className="flex items-center gap-2 pt-2 border-t border-blue-200/60">
+        <div className="flex items-center gap-2 pt-2 border-t border-emerald-200/60">
           <a
             href={mapsSearchUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex-1 py-1.5 px-2 rounded-lg bg-white border border-blue-200 text-blue-700 hover:bg-blue-50 text-[11px] font-semibold flex items-center justify-center gap-1 transition-colors"
+            className="flex-1 py-1.5 px-2 rounded-lg bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 text-[11px] font-semibold flex items-center justify-center gap-1 transition-colors"
           >
             <MapPin className="w-3 h-3 text-red-500" />
-            <span>Buka Google Maps</span>
+            <span>Lihat di Maps</span>
             <ExternalLink className="w-2.5 h-2.5 opacity-70" />
           </a>
 
@@ -115,9 +127,9 @@ export const ActiveDashboard: React.FC<ActiveDashboardProps> = ({
             href={reviewUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex-1 py-1.5 px-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 text-[11px] font-semibold flex items-center justify-center gap-1 transition-colors shadow-sm"
+            className="flex-1 py-1.5 px-2 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 text-[11px] font-semibold flex items-center justify-center gap-1 transition-colors shadow-sm"
           >
-            <span>Uji Buka Link (Bebas 404)</span>
+            <span>Uji Buka Link Ulasan</span>
             <ExternalLink className="w-2.5 h-2.5" />
           </a>
         </div>
@@ -127,8 +139,8 @@ export const ActiveDashboard: React.FC<ActiveDashboardProps> = ({
       <div className="mt-3 p-3.5 rounded-2xl bg-slate-900 text-white text-left relative overflow-hidden">
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-1.5 text-xs font-bold text-cyan-300">
-            <Radio className="w-3.5 h-3.5 animate-pulse" />
-            <span>Koneksi Chip NFC 13.56 MHz</span>
+            <Radio className="w-3.5 h-3.5 animate-pulse text-cyan-400" />
+            <span>Chip Kartu NFC 13.56 MHz</span>
           </div>
           <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-400/30">
             ISO 14443-A
@@ -137,7 +149,7 @@ export const ActiveDashboard: React.FC<ActiveDashboardProps> = ({
 
         <div className="grid grid-cols-2 gap-2 text-[11px] font-mono text-slate-300">
           <div>
-            <span className="text-[10px] text-slate-400 block font-sans">Chip UID:</span>
+            <span className="text-[10px] text-slate-400 block font-sans">UID Kartu:</span>
             <span className="text-cyan-200 font-bold truncate block">
               {card.nfcUid || '04:A8:1F:B3:2E:77'}
             </span>
@@ -145,21 +157,21 @@ export const ActiveDashboard: React.FC<ActiveDashboardProps> = ({
           <div>
             <span className="text-[10px] text-slate-400 block font-sans">Tipe Chip:</span>
             <span className="text-white truncate block">
-              {card.nfcChipType || 'NTAG213 (13.56MHz)'}
+              {card.nfcChipType || 'NTAG213 (13.56 MHz)'}
             </span>
           </div>
         </div>
 
         <div className="mt-2.5 pt-2 border-t border-slate-800 flex items-center justify-between">
           <span className="text-[10.5px] text-slate-400">
-            Format: NDEF URL Smart Review
+            Target: Menu Ulasan Pintar
           </span>
           <button
             type="button"
             onClick={onOpenNfcConnection}
             className="text-[11px] font-bold text-cyan-300 hover:text-cyan-200 underline cursor-pointer"
           >
-            Input / Tulis ke Kartu Sekarang →
+            Tulis / Input ke Tag NFC HP →
           </button>
         </div>
       </div>
@@ -168,7 +180,7 @@ export const ActiveDashboard: React.FC<ActiveDashboardProps> = ({
       <div className="mt-3 p-3 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between text-xs text-slate-600">
         <div className="flex items-center gap-2">
           <MessageSquare className="w-4 h-4 text-emerald-600" />
-          <span>WhatsApp Filter:</span>
+          <span>WhatsApp Filter Pemilik:</span>
         </div>
         <span className="font-mono font-semibold text-slate-800">
           {formatWhatsAppDisplay(card.wa)}
@@ -190,7 +202,7 @@ export const ActiveDashboard: React.FC<ActiveDashboardProps> = ({
           </span>
         </div>
         <div className="p-2.5 rounded-xl bg-emerald-50/70 border border-emerald-200/70 text-center">
-          <span className="block text-[10px] text-emerald-700 font-medium">Keluhan Filter</span>
+          <span className="block text-[10px] text-emerald-700 font-medium">Filter WA</span>
           <span className="text-base font-extrabold text-emerald-700 font-mono">
             {stats.negativeIntercepted}
           </span>
@@ -224,7 +236,7 @@ export const ActiveDashboard: React.FC<ActiveDashboardProps> = ({
             className="py-2.5 px-3 bg-white border border-slate-200 hover:bg-slate-50 text-slate-800 rounded-xl font-bold text-xs transition-colors cursor-pointer flex items-center justify-center gap-1.5"
           >
             <Play className="w-3.5 h-3.5 fill-slate-800" />
-            <span>Form Rating</span>
+            <span>Buka Menu Ulasan</span>
           </button>
         </div>
 
