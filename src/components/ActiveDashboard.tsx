@@ -159,7 +159,7 @@ export const ActiveDashboard: React.FC<ActiveDashboardProps> = ({
             onClick={onOpenNfcConnection}
             className="text-[11px] font-bold text-cyan-300 hover:text-cyan-200 underline cursor-pointer"
           >
-            Tulis / Scan Ulang →
+            Input / Tulis ke Kartu Sekarang →
           </button>
         </div>
       </div>
@@ -216,7 +216,7 @@ export const ActiveDashboard: React.FC<ActiveDashboardProps> = ({
             className="py-2.5 px-3 bg-slate-900 hover:bg-slate-800 text-cyan-300 rounded-xl font-bold text-xs transition-colors cursor-pointer flex items-center justify-center gap-1.5"
           >
             <Radio className="w-3.5 h-3.5 text-cyan-400" />
-            <span>Koneksi 13.56 MHz</span>
+            <span>Tulis ke Tag NFC</span>
           </button>
 
           <button

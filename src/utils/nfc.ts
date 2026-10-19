@@ -1,4 +1,4 @@
-// NFC 13.56 MHz (ISO/IEC 14443-A / NDEF) Web NFC Hardware and Simulator Service
+// NFC 13.56 MHz (ISO/IEC 14443-A / NDEF) Web NFC Hardware and Diagnostic Service
 
 export interface NfcScanResult {
   serialNumber: string; // 13.56 MHz UID
@@ -7,8 +7,68 @@ export interface NfcScanResult {
   records?: Array<{ recordType: string; data: string }>;
 }
 
+export interface NfcDiagnostic {
+  hasWebNfc: boolean;
+  isSecureContext: boolean;
+  isAndroid: boolean;
+  isChrome: boolean;
+  isIos: boolean;
+  platformDescription: string;
+  recommendation: string;
+}
+
 export function isWebNfcSupported(): boolean {
   return typeof window !== 'undefined' && 'NDEFReader' in window;
+}
+
+export function getNfcDiagnostic(): NfcDiagnostic {
+  if (typeof window === 'undefined') {
+    return {
+      hasWebNfc: false,
+      isSecureContext: false,
+      isAndroid: false,
+      isChrome: false,
+      isIos: false,
+      platformDescription: 'Server / Non-Browser',
+      recommendation: 'Jalankan di browser ponsel.',
+    };
+  }
+
+  const ua = navigator.userAgent.toLowerCase();
+  const isAndroid = /android/i.test(ua);
+  const isIos = /iphone|ipad|ipod/i.test(ua);
+  const isChrome = /chrome/i.test(ua) && !/edg|opr|samsung|ucbrowser|line/i.test(ua);
+  const hasWebNfc = 'NDEFReader' in window;
+  const isSecure = window.isSecureContext;
+
+  let platformDescription = 'Desktop / PC';
+  let recommendation = '';
+
+  if (isAndroid) {
+    if (hasWebNfc) {
+      platformDescription = 'HP Android (Web NFC Didukung)';
+      recommendation = 'Pastikan fitur NFC diaktifkan di Pengaturan HP Anda, lalu tempelkan kartu ke bodi belakang HP.';
+    } else {
+      platformDescription = 'HP Android (Browser Non-Chrome / In-App)';
+      recommendation = 'Buka website ini menggunakan aplikasi Google Chrome resmi di Android agar dapat langsung menulis ke tag NFC.';
+    }
+  } else if (isIos) {
+    platformDescription = 'Apple iPhone / iOS';
+    recommendation = 'Apple Safari belum mengizinkan website menulis langsung ke NFC (CoreNFC). Gunakan aplikasi gratis "NFC Tools" di iPhone atau buka website ini di HP Android.';
+  } else {
+    platformDescription = 'Komputer / Laptop (Desktop)';
+    recommendation = 'Fitur penulisan tag NFC fisik memerlukan smartphone dengan sensor NFC (buka link ini di Google Chrome HP Android).';
+  }
+
+  return {
+    hasWebNfc,
+    isSecureContext: isSecure,
+    isAndroid,
+    isChrome,
+    isIos,
+    platformDescription,
+    recommendation,
+  };
 }
 
 export function generate1356Uid(): string {
@@ -25,8 +85,7 @@ export class NfcService {
   public static readonly STANDARD = 'ISO/IEC 14443 Type A';
 
   /**
-   * Scans a physical 13.56 MHz NFC Card using Web NFC API (supported on Chrome Android & NFC devices)
-   * or falls back to interactive simulated scan.
+   * Scans a physical 13.56 MHz NFC Card using Web NFC API
    */
   public static async scanPhysicalCard(
     onReading: (result: NfcScanResult) => void,
@@ -65,17 +124,21 @@ export class NfcService {
         });
 
         ndef.addEventListener('readingerror', () => {
-          onError('Gagal membaca kartu NFC 13.56 MHz. Pastikan kartu ditempelkan stabil di dekat sensor NFC.');
+          onError('Gagal membaca kartu NFC 13.56 MHz. Pastikan kartu ditempelkan stabil di dekat sensor antena NFC HP.');
         });
       } catch (err: any) {
         if (err.name === 'NotAllowedError') {
-          onError('Izin akses NFC ditolak oleh browser.');
+          onError('Izin NFC belum diberikan di browser Chrome atau fitur NFC di HP dalam kondisi mati.');
+        } else if (err.name === 'NotSupportedError') {
+          onError('Perangkat ini tidak memiliki perangkat keras NFC 13.56 MHz.');
+        } else if (err.name === 'AbortError') {
+          // aborted deliberately
         } else {
           onError(err.message || 'Sensor NFC tidak tersedia atau sedang dinonaktifkan.');
         }
       }
     } else {
-      // Simulated 13.56 MHz NFC hardware scan for desktop or devices without Web NFC
+      // Simulated scan for testing on desktop
       setTimeout(() => {
         if (typeof navigator !== 'undefined' && navigator.vibrate) {
           navigator.vibrate([30, 40, 30]);
@@ -91,45 +154,62 @@ export class NfcService {
             },
           ],
         });
-      }, 1200);
+      }, 1000);
     }
   }
 
   /**
-   * Writes the Review URL directly to the physical 13.56 MHz NFC tag chip
+   * Writes the Review URL directly to the physical 13.56 MHz NFC tag chip.
+   * MUST be invoked directly from a user click/gesture.
    */
   public static async writeReviewUrlToCard(
     url: string,
     onSuccess: (uid: string) => void,
-    onError: (error: string) => void
+    onError: (error: string) => void,
+    abortSignal?: AbortSignal
   ): Promise<void> {
     if (isWebNfcSupported()) {
       try {
         const NDEFReaderClass = (window as any).NDEFReader;
         const ndef = new NDEFReaderClass();
-        await ndef.write({
-          records: [
-            {
-              recordType: 'url',
-              data: url,
-            },
-          ],
-        });
+
+        // Write NDEF standard URL record to 13.56 MHz Tag
+        await ndef.write(
+          {
+            records: [
+              {
+                recordType: 'url',
+                data: url,
+              },
+            ],
+          },
+          {
+            signal: abortSignal,
+            overwrite: true,
+          }
+        );
 
         if (typeof navigator !== 'undefined' && navigator.vibrate) {
-          navigator.vibrate([50, 80, 50]);
+          navigator.vibrate([80, 50, 100]);
         }
         onSuccess(generate1356Uid());
       } catch (err: any) {
-        onError(err.message || 'Gagal menulis ke chip NFC 13.56 MHz. Tempelkan kartu lebih dekat ke sensor.');
+        if (err.name === 'NotAllowedError') {
+          onError('Izin NFC ditolak atau NFC di pengaturan HP Anda belum dinyalakan. Masuk ke Pengaturan HP > Koneksi > Nyalakan NFC.');
+        } else if (err.name === 'NotSupportedError') {
+          onError('Tipe kartu/tag NFC ini tidak didukung atau kapasitas memorinya terlalu kecil.');
+        } else if (err.name === 'NotReadableError') {
+          onError('Kartu terlepas terlalu cepat. Tempelkan kartu dan tahan 1-2 detik di belakang HP.');
+        } else if (err.name === 'AbortError') {
+          // aborted by user
+        } else {
+          onError(err.message || 'Gagal menulis ke chip NFC 13.56 MHz.');
+        }
       }
     } else {
-      // Simulated write with real 13.56 MHz NDEF encoding delay
-      await new Promise((r) => setTimeout(r, 1000));
-      if (typeof navigator !== 'undefined' && navigator.vibrate) {
-        navigator.vibrate([50, 80, 50]);
-      }
-      onSuccess(generate1356Uid());
+      // If Web NFC is not available on this browser/device
+      const diagnostic = getNfcDiagnostic();
+      onError(`Browser ini belum mendukung Web NFC secara langsung (${diagnostic.platformDescription}). ${diagnostic.recommendation}`);
     }
   }
 }
