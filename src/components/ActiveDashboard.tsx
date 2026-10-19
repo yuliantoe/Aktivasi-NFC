@@ -39,7 +39,7 @@ export const ActiveDashboard: React.FC<ActiveDashboardProps> = ({
   onResetCard,
 }) => {
   const [copied, setCopied] = useState(false);
-  const reviewUrl = getGoogleReviewUrl(card.placeId, card.customUrl);
+  const reviewUrl = getGoogleReviewUrl(card.placeId, card.customUrl, card.name, card.addr);
   const mapsSearchUrl = card.googleMapsUrl || buildGoogleMapsSearchUrl(card.name, card.addr);
 
   const handleCopyLink = () => {
@@ -115,9 +115,9 @@ export const ActiveDashboard: React.FC<ActiveDashboardProps> = ({
             href={reviewUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex-1 py-1.5 px-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 text-[11px] font-semibold flex items-center justify-center gap-1 transition-colors"
+            className="flex-1 py-1.5 px-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 text-[11px] font-semibold flex items-center justify-center gap-1 transition-colors shadow-sm"
           >
-            <span>Uji Review Link</span>
+            <span>Uji Buka Link (Bebas 404)</span>
             <ExternalLink className="w-2.5 h-2.5" />
           </a>
         </div>

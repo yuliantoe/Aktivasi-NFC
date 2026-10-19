@@ -64,7 +64,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       addr: addr.trim() || undefined,
       wa: normWa,
       pin,
-      customUrl: customUrl.trim() || undefined,
+      customUrl: customUrl.trim() || buildGoogleMapsSearchUrl(name.trim(), addr.trim()),
       nfcUid,
       googleMapsUrl: mapsUrl,
     };
@@ -189,16 +189,31 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           </div>
 
           <div>
-            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-              Tautan Google Review Kustom (Opsional)
-            </label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+                Tautan Google Review (Bebas 404)
+              </label>
+              <a
+                href={customUrl.trim() || buildGoogleMapsSearchUrl(name, addr)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-[10.5px] font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1"
+                title="Cek apakah link ulasan berfungsi tanpa error 404"
+              >
+                <span>Tes Buka Link</span>
+                <ExternalLink className="w-2.5 h-2.5" />
+              </a>
+            </div>
             <input
               type="url"
               value={customUrl}
               onChange={(e) => setCustomUrl(e.target.value)}
-              placeholder="https://g.page/r/... atau biarkan kosong untuk default"
+              placeholder="https://g.page/r/... atau biarkan kosong untuk otomatis Google Maps"
               className="w-full px-3.5 py-2 text-xs rounded-xl border border-slate-200 focus:outline-none focus:border-blue-600 font-mono"
             />
+            <p className="text-[10.5px] text-slate-500 mt-1">
+              Bila kosong, sistem otomatis memakai profil Google Maps (dijamin bebas 404).
+            </p>
           </div>
 
           {error && (

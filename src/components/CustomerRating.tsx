@@ -25,7 +25,7 @@ export const CustomerRating: React.FC<CustomerRatingProps> = ({
   const [feedbackMsg, setFeedbackMsg] = useState<string>('');
   const [formattedWaText, setFormattedWaText] = useState<string>('');
 
-  const reviewUrl = getGoogleReviewUrl(card.placeId, card.customUrl);
+  const reviewUrl = getGoogleReviewUrl(card.placeId, card.customUrl, card.name, card.addr);
 
   const handleStarClick = (rating: number) => {
     setSelectedRating(rating);

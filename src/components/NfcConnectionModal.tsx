@@ -41,7 +41,7 @@ export const NfcConnectionModal: React.FC<NfcConnectionModalProps> = ({
   const [copiedUrl, setCopiedUrl] = useState(false);
 
   const abortControllerRef = useRef<AbortController | null>(null);
-  const targetUrl = getGoogleReviewUrl(card.placeId, card.customUrl);
+  const targetUrl = getGoogleReviewUrl(card.placeId, card.customUrl, card.name, card.addr);
 
   // Clean up any ongoing NFC write/read session when modal closes or unmounts
   useEffect(() => {

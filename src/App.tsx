@@ -52,7 +52,7 @@ export default function App() {
             addr: parsed.addr || 'Jl. Tebet Raya, Jakarta Selatan',
             wa: parsed.wa,
             pin: parsed.pin || '1234',
-            customUrl: parsed.customUrl,
+            customUrl: parsed.customUrl || (parsed.name ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${parsed.name} ${parsed.addr || ''}`.trim())}` : undefined),
             colorTheme: parsed.colorTheme || 'midnight',
             createdAt: parsed.createdAt,
             nfcUid: parsed.nfcUid || '04:A8:1F:B3:2E:77:9C',

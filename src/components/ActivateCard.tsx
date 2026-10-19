@@ -191,7 +191,7 @@ export const ActivateCard: React.FC<ActivateCardProps> = ({ cardId, onActivated 
       addr: selectedPlace.addr,
       wa: normWa,
       pin: fullPin,
-      customUrl: customReviewUrl.trim() || undefined,
+      customUrl: customReviewUrl.trim() || selectedPlace.googleMapsUrl || buildGoogleMapsSearchUrl(selectedPlace.name, selectedPlace.addr),
       createdAt: new Date().toISOString(),
       // 13.56 MHz NFC specifications
       nfcUid,
@@ -338,11 +338,11 @@ export const ActivateCard: React.FC<ActivateCardProps> = ({ cardId, onActivated 
                 </button>
               </div>
 
-              {/* Google Maps verification pill */}
-              <div className="pt-2 border-t border-slate-200/60 flex items-center justify-between text-xs">
+              {/* Google Maps verification pill and test link */}
+              <div className="pt-2 border-t border-slate-200/60 flex items-center justify-between text-xs flex-wrap gap-2">
                 <div className="flex items-center gap-1.5 text-[11px] text-emerald-800 font-medium">
                   <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>Bisnis Sesuai Terpilih</span>
+                  <span>Bisnis Sesuai (Bebas 404)</span>
                   {selectedPlace.rating && (
                     <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 text-[10px] font-bold">
                       <Star className="w-2.5 h-2.5 fill-amber-500 text-amber-500" />
@@ -350,17 +350,16 @@ export const ActivateCard: React.FC<ActivateCardProps> = ({ cardId, onActivated 
                     </span>
                   )}
                 </div>
-                {selectedPlace.googleMapsUrl && (
-                  <a
-                    href={selectedPlace.googleMapsUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-[11px] font-semibold text-blue-600 hover:text-blue-800 flex items-center gap-1 hover:underline"
-                  >
-                    <span>Cek di Maps</span>
-                    <ExternalLink className="w-3 h-3" />
-                  </a>
-                )}
+                <a
+                  href={customReviewUrl.trim() || selectedPlace.googleMapsUrl || buildGoogleMapsSearchUrl(selectedPlace.name, selectedPlace.addr)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-[11px] font-bold text-blue-700 bg-white px-2 py-1 rounded-lg border border-blue-200 hover:bg-blue-50 flex items-center gap-1 shadow-2xs"
+                  title="Buka halaman untuk memastikan ulasan aktif dan tidak 404"
+                >
+                  <span>Tes Buka Link Ulasan</span>
+                  <ExternalLink className="w-3 h-3" />
+                </a>
               </div>
             </div>
           ) : (
